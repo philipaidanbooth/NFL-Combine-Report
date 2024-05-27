@@ -1,0 +1,363 @@
+---
+title: "NFL_Combine_Project"
+author: "Philip Booth"
+date: "2024-05-6"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE)
+
+#install packages
+library(gridExtra)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(tidyr)
+
+
+combine_dat <-read.csv("NFLcombine.csv")
+receiving_data <- read.csv("receiving_2018.csv")
+passing_data <- read.csv("passing_2018.csv")
+defense_data <- read.csv("defense_2018.csv")
+rushing_data <- read.csv("rushing_2018.csv")
+
+#grepl looks for a string char and gsub replaces it
+combine_data <- combine_dat %>% 
+  rename(Player = name) %>% 
+  mutate(X40yards = ifelse(grepl("\\*", X40yards), 
+                           gsub("\\*", "", X40yards), X40yards),
+         X40yards = as.numeric(X40yards)) 
+
+#Create Wide receiver Data
+df_WR <- full_join(receiving_data, combine_data, by="Player") 
+WR_data <- df_WR %>% 
+  filter(pos == "WR",
+         shuttle <=4.7) %>% 
+  select(-wonderlic)
+
+
+```
+
+## Introduction
+
+Football is a cultural staple in the US. It ranks as the most highly broadcasted sport as well as the most played sport at a high-school and college level. This intense spotlight, in turn drives some fierce competition. At the top level, picking the right player to fit in your team can pay out dividends in the season. The NFL combine gives scouts supplementary data to help their organizations pick the best player for their teams? In this report, I'm interested in exploring NFL Combine metrics and their ability to predict NFL Success for Wide Receivers. In particular, I will observe whether a faster 3 cone drill is predictive of more yards per game.
+
+
+## Summary Data
+
+
+```{r,fig.height=6, fig.width=8}
+#Distributions of the 40 yard dash, Bench Press and 3 Cone drill
+w1 <- ggplot(WR_data, aes(x=X40yards)) + geom_histogram(binwidth = .045,col="#FFB81C", fill ="#CA2430") +
+  ggtitle("40 Yard Dash Times ") + xlab("Time (Seconds)") + ylab("WR Count")
+
+w2 <- ggplot(WR_data, aes(x=bench)) + geom_histogram(binwidth = 1.9,col="#9E7C0C", fill="#241773") +
+  ggtitle("225LB Bench Press Reps") + xlab("Reps") + ylab("WR Count")
+
+w3 <- ggplot(WR_data, aes(x=X3cone)) + geom_histogram(binwidth = .08,col="#C60C30", fill="#002244") +
+  ggtitle("3 Cone Drill Times") + xlab("Time (Seconds)") + ylab("WR Count")
+
+w4 <- ggplot(WR_data, aes(x=leap)) + geom_histogram(binwidth = 1.5,col="#041E42", fill="#869397") +
+  ggtitle("Vertical Jump") + xlab("Height (Inches)") + ylab("WR Count")
+
+w5 <- ggplot(WR_data, aes(x=jump)) + geom_histogram(binwidth = 3,col="#FFC20E", fill="#0080C6") +
+ ggtitle("Broad Jump") + xlab("Distance (Inches)") + ylab("WR Count")
+
+w6 <- ggplot(WR_data, aes(x=shuttle)) + geom_histogram(binwidth = .08,col="#69BE28", fill="#002244") +
+  ggtitle("20 Yard Shuttle times") + xlab("Time (Seconds)") + ylab("WR Count")
+
+#arrange multiple graphs together
+grid.arrange(w1, w3, w6, w2, w5, w4, ncol = 3)
+
+```
+ 
+ 
+These 6 histograms illustrate the distributions of key metrics for the combine. Once again, I intend to find if there is a metric that predicts NFL success. From the publications I've read, it is evident that bench press has no effect on a players success in the league. I wanted to display the following scatter-plot so we could have a reference point when we compare other combine metrics that are more relevant to a wide receiver. The following data compare the number of yards per game as a function of bench press reps.
+
+
+```{r,fig.height=2.5, fig.width=2.5}
+ ggplot(WR_data, aes(x=bench, y=YPG)) + geom_point(size=.5) + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, span=1) +      
+  ggtitle("YPG vs. Bench Press") + xlab("Bench (Reps)") + ylab("YPG")
+```
+
+Let's move away from less relevant metrics and go back to everyone's favorite test: the 40 yard dash. If popularity of the test correlated to success on the field, we'd have every team drooling over who they could draft from the elite group of speedsters that year. Let's test whether there is a true correlation present there.
+
+```{r,fig.height=3.5, fig.width=10}
+#Scatter plot of yards as a function of 40 times
+
+WR_40 <- WR_data %>% 
+  mutate(TD_adj = TD + .01) %>% 
+  filter(Gms >= 4) 
+
+g4 <- ggplot(WR_40, aes(x=X40yards, y=YPG)) + geom_point() + 
+  stat_smooth(method= "loess", se=FALSE, formula = y ~ x, span=1) +
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col="grey") +
+  ggtitle("YPG vs. 40 Yard Dash") + xlab("40 Yard Dash (Seconds)") + ylab("YPG")
+
+g5 <- ggplot(WR_40, aes(x=X40yards, y=TD)) + geom_point() +
+    stat_smooth(method= "loess", se=FALSE, formula = y ~ x, span=1) +
+    stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col="grey") +
+    ggtitle("Touchdowns vs. 40 Yard Dash") + xlab("40 Yard Dash (Seconds)") + ylab("TD")
+
+g6 <- ggplot(WR_40, aes(x=X40yards, y=Rec)) + geom_point() + 
+  stat_smooth(method= "loess", se=FALSE , formula = y ~ x, span=1) +
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col="grey") +
+  ggtitle("Receptions vs. 40 Yard Dash") + xlab("40 Yard Dash (Seconds)") + ylab("Rec")
+
+grid.arrange(g4, g5, g6, ncol = 3)
+```
+
+### Re-expression
+
+None of these scatter-plots, which measure statistical success through 40 times provide any immediate correlations, but the TD data looks skewed. In hopes that mitigating skewness would yield potential insights, I first used a box-plot to re-express the TD distribution making the plot as symmetric as possible. However, the resulting scatter-plot using re-expressed TD data still provided no definitive evidence in proving any correlation between performance and 40 yard dash times. I think I should try my luck elsewhere.
+
+
+```{r,fig.height=3, fig.width=7}
+# #Chunk 3
+#Re-express data
+WR_data_40TD <- WR_40 %>%
+  mutate(TD_re = (TD_adj)^(1/3))
+
+X3.1 <- ggplot(WR_data_40TD, aes(x = factor(0),y=TD_re)) + geom_boxplot(col="#B20032",fill="#192E6C") +
+  ggtitle("TD's Re-exressed to 1/3 degree") +
+  ylab(expression(TD^(1/3))) +
+  xlab("")
+
+
+X3.2 <- ggplot(WR_data_40TD, aes(X40yards , TD_re)) + geom_point() +
+  stat_smooth(method = "lm", se=FALSE, formula = y ~ x,col="grey") +
+  stat_smooth(method= "loess", se=FALSE, formula = y ~ x, col="blue") +
+  ggtitle(expression(Touchdowns^{1/3} ~ "vs. 40-yrd Dash")) +
+  ylab(expression(Touchdowns~~Completed^(1/3))) +
+  xlab("40 Yards dash times (Seconds)")
+
+grid.arrange(X3.1, X3.2, ncol = 2)
+
+```
+
+## Primary Analysis
+
+The next best path to take is to see whether certain categories of wide receivers can be predicted by these same metrics. The first place of comparison I'd like to make is with player height. My question of focus is now whether 6 foot and above wide receivers indicate better league success in correlation to their combine metrics. After conducting initial tests, I observed that there was still no clear trend in 40 yard dash times and NFL success. As a result, I expanded my investigation onto the effect of all timed combine metrics on yards per game.
+
+
+```{r,fig.height=3, fig.width=8.5}
+#summary(WR_data$height)
+
+WR_data_40tall <- WR_data_40TD %>% 
+  filter(height > 72 & !is.na(X3cone))
+
+
+g4 <- ggplot(WR_data_40tall, aes(x=X40yards, y=YPG)) + geom_point() + 
+  stat_smooth(method= "loess", se=FALSE, formula = y ~ x, span=1) +
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col="grey") +
+  ggtitle("YPG vs. 40 Yard Dash (Tall)") + xlab("40 Yard Dash (Seconds)") + ylab("YPG")
+
+g5 <- ggplot(WR_data_40tall, aes(x=X3cone, y=YPG)) + geom_point() + 
+  
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col="blue") +
+  ggtitle("YPG vs. 3 Cone Drill (Tall)") + xlab("3 Cone Drill (Seconds)") + ylab("YPG")
+
+
+g6 <- ggplot(WR_data_40tall, aes(x=shuttle, y=YPG)) + geom_point() + 
+  stat_smooth(method= "loess", se=FALSE , formula = y ~ x, span=1) +
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col="grey") +
+  ggtitle("YPG vs. Shuttle (Tall)") + xlab("Shuttle (Seconds)") + ylab("YPG")
+
+
+grid.arrange(g4, g5, g6, ncol = 3)
+```
+
+### Height Analysis
+
+The 3 cone drill seems to predict the only trend in decreased splits and increased YPG. Although the trend is slight, let's narrow focus further and compare yards per game to 3 cone drill splits along all height categories of receivers.
+
+
+```{r, fig.width=8.5, fig.height=3.5}
+#Tracking Allometric data now
+WR_Allometric <- WR_40 %>% 
+  mutate(Heights = case_when(height <= 70 ~ "Short",
+                             height > 70 & height < 74 ~ "Average",
+                             height >= 74 ~ "Tall"),
+         WeightQ = case_when(weight <= 203 ~ "Light Half",
+                             weight  > 203 ~ "Heavy Half"),
+         hwRatio = case_when((height/weight) < 0.3446 ~ "1st Quartile",
+                             (height/weight) >= 0.3446 & (height/weight) < 0.355 ~"2nd Quartile",
+                             (height/weight) >=.355 & (height/weight) < 0.3740 ~ "3rd Quartile",
+                             height/weight >= 0.3740 ~ "4th Quartile"),
+  Heights = factor(Heights, levels = c("Short", "Average", "Tall"))) %>% 
+  filter(!is.na(X3cone))
+
+ggplot(WR_Allometric, aes(x=X3cone, y=YPG)) + geom_point() + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x) +
+  facet_wrap(~Heights) +
+  theme(legend.position = "right") +
+    ggtitle("YPG vs. 3 Cone Drill") + xlab("3 Cone Drill (Seconds)") + ylab("YPG")
+  
+
+  
+
+WR.Tall <- WR_Allometric %>% 
+  filter(Heights == "Short")
+```
+
+After separating heights into 3 categories, it appears that the taller players displaying a quicker 3 cone split gain slightly more yards per game when compared to both average and stocky players. Take this data with a grain of salt, however, as the categories don't seem to cluster, which indicates the potential trend may be weak. However, the data seems reasonable as the 3 cone drill is a test of agility, and taller individuals often have reduced agility because of higher center of gravity. Tall players who can offset their natural lack of agility with a quick 3 cone drill split may very well possess the athletic toolkit to perform in the league. Before stacking more data in favor of this hypothesis, let's look at height's counterpart, weight. 
+
+### Weight Analysis
+
+
+```{r, fig.width=10, fig.height=4}
+
+g1 <- ggplot(WR_Allometric, aes(x=X3cone, y=YPG,col=WeightQ)) + geom_point() + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, aes(group = WeightQ)) +
+  theme(legend.position = "top") +
+  ggtitle("YPG vs. 40 Yard Dash") + xlab("40 Yard Dash (Seconds)") + ylab("YPG")
+  
+
+g2 <- ggplot(WR_Allometric, aes(x=shuttle, y=YPG,col=WeightQ)) + geom_point() + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, aes(group = WeightQ)) +
+  theme(legend.position = "top") +
+    ggtitle("YPG vs. 3 Cone Drill") + xlab("3 Cone Drill (Seconds)") + ylab("YPG")
+
+
+g3 <- ggplot(WR_Allometric, aes(x=X40yards, y=YPG,col=WeightQ)) + geom_point() + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, aes(group = WeightQ)) +
+  theme(legend.position = "top") +
+    ggtitle("YPG vs. Shuttle") + xlab("Shuttle (Seconds)") + ylab("YPG")
+
+
+grid.arrange(g1, g2, g3, ncol = 3)
+```
+
+Once again the most pronounced metric lies in the 3 cone drill. Heavier players displaying fast 3 cone splits also tend to get more yards per game. Still the correlation is weak if any, so in order to develop the most clear prediction of drill on success, I will investigate if the height to weight ratio impacts the data surrounding YPG as a function of 3 cone splits. Based on the data gleaned up to this point, I hypothesize that a taller and heavier player will have the strongest correlation between a fast 3 cone drill and more yards per game.
+
+### Body Composition Analysis
+
+
+```{r, fig.width=5, fig.height=3.5}
+
+ggplot(WR_Allometric, aes(x=X3cone, y=YPG,col=hwRatio)) + geom_point() + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, aes(group = hwRatio)) +
+  ggtitle("YPG vs. 3 Cone Drill Times (Height:Weight Ratio) ") + 
+   xlab("3 Cone times (Seconds)") + ylab("YPG") +
+  theme(legend.position = "right") 
+
+```
+
+
+The only relevant increase in YPG resulting from a decrease split comes in the 1st quartile. To refresh, the lower the quartile, the bulkier the frame. The 4th quartile for reference would be leaner players relative to their height. This plot suggests that there is more predictability in YPG as a result of faster 3 cone splits fro the 1st quartile. Now I'll compare YPG predictability of the 1st quartile of Height/Weight ratio against Lengthy players.
+
+#### YPG vs. 3 Cone Drill Times
+
+
+```{r, fig.width=12, fig.height=4}
+WR_1Q <- WR_Allometric %>% 
+  filter(hwRatio == "1st Quartile")
+
+WR.Heavy <- WR_Allometric %>% 
+  filter(WeightQ == "Heavy Half")
+
+g1 <- ggplot(WR.Tall, aes(x=X3cone, y=YPG)) + geom_point(col="black") +
+   stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col = "red") +
+   ggtitle("Lengthy Quartile of WR's") + 
+   xlab("3 Cone times (Seconds)") + ylab("YPG")
+
+
+g2 <- ggplot(WR.Heavy, aes(x=X3cone, y=YPG)) + geom_point(col="blue2") + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x,col="blue2") +
+  ggtitle("Heavy Half of WR's") + 
+  xlab("3 Cone times (Seconds)") + ylab("YPG")
+
+g3 <- ggplot(WR_1Q, aes(x=X3cone, y=YPG)) + geom_point(col="red2") + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x,col="red2")  +
+  ggtitle("1st Quartile of (Height:Weight) Ratio") + xlab("3 Cone times (Seconds)") + ylab("YPG")
+
+#lm(WR.Tall$YPG ~ WR.Tall$X3cone)
+# lm(WR.Heavy$YPG ~ WR.Heavy$X3cone)
+# lm(WR_1Q$YPG ~WR_1Q$X3cone)
+
+grid.arrange(g1, g2, g3, ncol = 3)
+```
+
+
+```{r,fig.width=3,fig.height=3}
+
+ggplot(WR_data_40tall, aes(x=X3cone, y=YPG)) + geom_point() + 
+  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col="blue") +
+  ggtitle("YPG vs. 3 Cone Drill (Tall)") + xlab("3 Cone Drill (Seconds)") + ylab("YPG")
+
+# R-D plot
+M <- lm(WR_data_40tall$YPG ~ WR_data_40tall$X3cone)
+WR_data_40tall$Residuals <- residuals(M)
+
+M2 <- lm(WR_Allometric$YPG ~ WR_Allometric$X3cone)
+WR_Allometric$Residuals <- residuals(M2)
+
+M3 <- lm(WR.Tall$YPG ~ WR.Tall$X3cone)
+WR.Tall$Residuals <- residuals(M3)
+
+#R-D Plots
+ggplot(WR_data_40tall, aes(x = X3cone , Residuals)) + geom_point() +
+  stat_smooth(method = "loess", se = FALSE, span = 2) 
+   xlab("Petal length")
+
+   
+ggplot(WR_Allometric, aes(x=X3cone, y=Residuals)) + geom_point() + 
+  stat_smooth(method= "loess", se=FALSE, formula = y ~ x, span = 1.5) +
+  theme(legend.position = "right") +
+    ggtitle("R-D PLot of YPG vs 3-Cone Drill") + xlab("3 Cone Drill (Seconds)") + ylab("Residuals")
+
+
+ggplot(WR.Tall, aes(x=X3cone, y=YPG)) + geom_point(col="black") +
+   stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col = "red") +
+   ggtitle("Lengthy Quartile of WR's") + 
+   xlab("3 Cone times (Seconds)") + ylab("YPG")
+
+ggplot(WR.Tall, aes(x=X3cone, y=Residuals)) + geom_point(col="black") +
+   stat_smooth(method= "loess", se=FALSE, formula = y ~ x, col = "red", span = .75) +
+   ggtitle("R-D PLot of Short WR") + 
+   xlab("3 Cone times (Seconds)") + ylab("Residuals")
+
+#--------------------------------------------------
+#re expressed short data
+WR.Tall.re <- data.frame(X3cone = WR.Tall$X3cone, 
+                      YPG = log(WR.Tall$YPG))
+M4 <- lm(YPG ~ X3cone, dat = WR.Tall.re)
+WR.Tall.re$Residuals <- residuals(M4)
+
+ggplot(WR.Tall.re, aes(x=X3cone, y=YPG)) + geom_point(col="black") +
+   stat_smooth(method= "lm", se=FALSE, formula = y ~ x + I(x^2), col = "red") +
+   ggtitle("Lengthy Quartile of WR's") + 
+   xlab("3 Cone times (Seconds)") + ylab("YPG")
+
+ ggplot(WR.Tall.re, aes(x=X3cone, y=Residuals)) + geom_point(col="black") +
+    stat_smooth(method= "loess", se=FALSE, formula = y ~ x, col = "red", span = 1.5) +
+    ggtitle("R-D PLot of Short WR") + 
+    xlab("3 Cone times (Seconds)") + ylab("Residuals")
+#-----------------------------------------------------
+#SL plot
+# Spread-level plot
+sl1 <- data.frame( std.res = sqrt(abs(residuals(M3))),
+                   fit = predict(M3))
+
+ggplot(sl1, aes(x = fit, y = std.res)) + geom_point() +
+  stat_smooth(method = "loess", se = FALSE, span = 2,
+              method.args = list(degree = 1))
+
+
+coef(M3)
+summary(M3)
+
+```
+
+
+
+At first glance, a lower height to weight ratio has a stronger negative correlation. Here are their slopes: Green(-24.18), Blue(-30.53), Red(-64.51). Further tests using height and weight to predict NFL success would be limited by the small data set size, preventing any reliable statistic. 
+
+## Conclusion
+
+Recapping on the flow of this report, I began interested in observing any association between the success of wide receivers in the NFL and their 40 yard dash. After learning correlation wasn't so black and white, I began prodding at the other combine metrics, eventually measuring categories of receivers. I found that the 3 cone drill had the clearest trends, and created statistics based on players body types. In conclusion, scouts should pay closest attention to Wide Receivers' 3 cone time's when the player has a Height:Weight ratio in the 1st quartile of NFL receivers. If the player they are scouting does not fall within that bracket, then check for their weight percentile in relation to speed and, finally, height. For any sort wide receivers who fall outside these quartiles, I will not be able to provide any reliable, predictive statistics yet.
