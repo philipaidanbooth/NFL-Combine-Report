@@ -39,6 +39,8 @@ WR_data <- df_WR %>%
          shuttle <=4.7) %>% 
   select(-wonderlic)
 
+write.csv(df_WR, file = "NFL_Combine_Performace.csv", row.names = FALSE)
+
 
 ```
 
@@ -253,107 +255,52 @@ The only relevant increase in YPG resulting from a decrease split comes in the 1
 
 #### YPG vs. 3 Cone Drill Times
 
-
 ```{r, fig.width=12, fig.height=4}
-WR_1Q <- WR_Allometric %>% 
-  filter(hwRatio == "1st Quartile")
+# Filter Data by Groups
+WR_1Q <- WR_Allometric %>% filter(hwRatio == "1st Quartile")
+WR.Heavy <- WR_Allometric %>% filter(WeightQ == "Heavy Half")
 
-WR.Heavy <- WR_Allometric %>% 
-  filter(WeightQ == "Heavy Half")
+# Plots: Comparing Key Groups (Lengthy, Heavy, 1st Quartile)
+g1 <- ggplot(WR.Tall, aes(x = X3cone, y = YPG)) + 
+  geom_point(col = "black") + 
+  stat_smooth(method = "lm", se = FALSE, formula = y ~ x, col = "red") +
+  ggtitle("Tall WRs") + 
+  xlab("3-Cone Drill (Seconds)") + 
+  ylab("YPG")
 
-g1 <- ggplot(WR.Tall, aes(x=X3cone, y=YPG)) + geom_point(col="black") +
-   stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col = "red") +
-   ggtitle("Lengthy Quartile of WR's") + 
-   xlab("3 Cone times (Seconds)") + ylab("YPG")
+g2 <- ggplot(WR.Heavy, aes(x = X3cone, y = YPG)) + 
+  geom_point(col = "blue2") + 
+  stat_smooth(method = "lm", se = FALSE, formula = y ~ x, col = "blue2") +
+  ggtitle("Heavy WRs") + 
+  xlab("3-Cone Drill (Seconds)") + 
+  ylab("YPG")
 
-
-g2 <- ggplot(WR.Heavy, aes(x=X3cone, y=YPG)) + geom_point(col="blue2") + 
-  stat_smooth(method= "lm", se=FALSE, formula = y ~ x,col="blue2") +
-  ggtitle("Heavy Half of WR's") + 
-  xlab("3 Cone times (Seconds)") + ylab("YPG")
-
-g3 <- ggplot(WR_1Q, aes(x=X3cone, y=YPG)) + geom_point(col="red2") + 
-  stat_smooth(method= "lm", se=FALSE, formula = y ~ x,col="red2")  +
-  ggtitle("1st Quartile of (Height:Weight) Ratio") + xlab("3 Cone times (Seconds)") + ylab("YPG")
-
-#lm(WR.Tall$YPG ~ WR.Tall$X3cone)
-# lm(WR.Heavy$YPG ~ WR.Heavy$X3cone)
-# lm(WR_1Q$YPG ~WR_1Q$X3cone)
+g3 <- ggplot(WR_1Q, aes(x = X3cone, y = YPG)) + 
+  geom_point(col = "red2") + 
+  stat_smooth(method = "lm", se = FALSE, formula = y ~ x, col = "red2") +
+  ggtitle("1st Quartile Height:Weight Ratio") + 
+  xlab("3-Cone Drill (Seconds)") + 
+  ylab("YPG")
 
 grid.arrange(g1, g2, g3, ncol = 3)
 ```
 
+```{r, fig.width=3, fig.height=3}
+# Fit the Linear Model
+model1 <- lm(YPG ~ X3cone, data = WR_Allometric)
 
-```{r,fig.width=3,fig.height=3}
+# Add Residuals to the Dataset
+WR_Allometric$Residuals <- residuals(model1)
 
-ggplot(WR_data_40tall, aes(x=X3cone, y=YPG)) + geom_point() + 
-  stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col="blue") +
-  ggtitle("YPG vs. 3 Cone Drill (Tall)") + xlab("3 Cone Drill (Seconds)") + ylab("YPG")
-
-# R-D plot
-M <- lm(WR_data_40tall$YPG ~ WR_data_40tall$X3cone)
-WR_data_40tall$Residuals <- residuals(M)
-
-M2 <- lm(WR_Allometric$YPG ~ WR_Allometric$X3cone)
-WR_Allometric$Residuals <- residuals(M2)
-
-M3 <- lm(WR.Tall$YPG ~ WR.Tall$X3cone)
-WR.Tall$Residuals <- residuals(M3)
-
-#R-D Plots
-ggplot(WR_data_40tall, aes(x = X3cone , Residuals)) + geom_point() +
-  stat_smooth(method = "loess", se = FALSE, span = 2) 
-   xlab("Petal length")
-
-   
-ggplot(WR_Allometric, aes(x=X3cone, y=Residuals)) + geom_point() + 
-  stat_smooth(method= "loess", se=FALSE, formula = y ~ x, span = 1.5) +
-  theme(legend.position = "right") +
-    ggtitle("R-D PLot of YPG vs 3-Cone Drill") + xlab("3 Cone Drill (Seconds)") + ylab("Residuals")
-
-
-ggplot(WR.Tall, aes(x=X3cone, y=YPG)) + geom_point(col="black") +
-   stat_smooth(method= "lm", se=FALSE, formula = y ~ x, col = "red") +
-   ggtitle("Lengthy Quartile of WR's") + 
-   xlab("3 Cone times (Seconds)") + ylab("YPG")
-
-ggplot(WR.Tall, aes(x=X3cone, y=Residuals)) + geom_point(col="black") +
-   stat_smooth(method= "loess", se=FALSE, formula = y ~ x, col = "red", span = .75) +
-   ggtitle("R-D PLot of Short WR") + 
-   xlab("3 Cone times (Seconds)") + ylab("Residuals")
-
-#--------------------------------------------------
-#re expressed short data
-WR.Tall.re <- data.frame(X3cone = WR.Tall$X3cone, 
-                      YPG = log(WR.Tall$YPG))
-M4 <- lm(YPG ~ X3cone, dat = WR.Tall.re)
-WR.Tall.re$Residuals <- residuals(M4)
-
-ggplot(WR.Tall.re, aes(x=X3cone, y=YPG)) + geom_point(col="black") +
-   stat_smooth(method= "lm", se=FALSE, formula = y ~ x + I(x^2), col = "red") +
-   ggtitle("Lengthy Quartile of WR's") + 
-   xlab("3 Cone times (Seconds)") + ylab("YPG")
-
- ggplot(WR.Tall.re, aes(x=X3cone, y=Residuals)) + geom_point(col="black") +
-    stat_smooth(method= "loess", se=FALSE, formula = y ~ x, col = "red", span = 1.5) +
-    ggtitle("R-D PLot of Short WR") + 
-    xlab("3 Cone times (Seconds)") + ylab("Residuals")
-#-----------------------------------------------------
-#SL plot
-# Spread-level plot
-sl1 <- data.frame( std.res = sqrt(abs(residuals(M3))),
-                   fit = predict(M3))
-
-ggplot(sl1, aes(x = fit, y = std.res)) + geom_point() +
-  stat_smooth(method = "loess", se = FALSE, span = 2,
-              method.args = list(degree = 1))
-
-
-coef(M3)
-summary(M3)
+# Residual Plot: YPG vs. 3-Cone Drill
+ggplot(WR_Allometric, aes(x = X3cone, y = Residuals)) + 
+  geom_point() + 
+  stat_smooth(method = "loess", se = FALSE, span = 1.5) +
+  ggtitle("Residual Plot: YPG vs. 3-Cone Drill") + 
+  xlab("3-Cone Drill (Seconds)") + 
+  ylab("Residuals")
 
 ```
-
 
 
 At first glance, a lower height to weight ratio has a stronger negative correlation. Here are their slopes: Green(-24.18), Blue(-30.53), Red(-64.51). Further tests using height and weight to predict NFL success would be limited by the small data set size, preventing any reliable statistic. 
